@@ -6,7 +6,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.RequestBody;
 
 @RestController
 @RequestMapping("/rooms")
@@ -18,8 +17,8 @@ public class RoomController {
     }
 
     @PostMapping
-    public Room createRoom(@RequestBody Chatter chatter) {
-        return roomService.createRoom(chatter.getName());
+    public Room createRoom() {
+        return roomService.createRoom();
     }
 
     @GetMapping("/{code}")

@@ -13,12 +13,11 @@ public class RoomService {
     private final Map<String, Room> rooms = new ConcurrentHashMap<>();
     private final Map<String, List<Chatter>> chattersByRoom = new ConcurrentHashMap<>();
 
-    public Room createRoom(String chatterName) {
+    public Room createRoom() {
         String code = generateRoomCode();
         Room room = new Room(code);
-        List<Chatter> chatters = new CopyOnWriteArrayList<>();
         rooms.put(code, room);
-        chattersByRoom.put(code, chatters);
+        chattersByRoom.put(code, new CopyOnWriteArrayList<>());
         return room;
     }
 
