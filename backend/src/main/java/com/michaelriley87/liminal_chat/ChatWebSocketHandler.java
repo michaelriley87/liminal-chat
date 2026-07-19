@@ -1,7 +1,13 @@
 package com.michaelriley87.liminal_chat;
 
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
+import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -10,6 +16,8 @@ import org.springframework.web.util.UriComponentsBuilder;
 public class ChatWebSocketHandler extends TextWebSocketHandler {
 
     private final RoomService roomService;
+
+    private final Map<String, List<WebSocketSession>> sessionsByRoom = new ConcurrentHashMap<>();
 
     public ChatWebSocketHandler(RoomService roomService) {
         this.roomService = roomService;
@@ -38,25 +46,56 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         session.getAttributes().put("roomCode", roomCode);
         session.getAttributes().put("name", name);
 
+        sessionsByRoom.computeIfAbsent(roomCode, code -> new CopyOnWriteArrayList<>()).add(session);
+
         roomService.addChatter(roomCode, new Chatter(name));
 
         System.out.println(name + " connected to room " + roomCode);
     }
 
     @Override
-    public void afterConnectionClosed(
-            WebSocketSession session,
-            CloseStatus status) {
-
-        String roomCode =
-            (String) session.getAttributes().get("roomCode");
-
-        String name =
-            (String) session.getAttributes().get("name");
-
-        if (roomCode != null && name != null) {
-            roomService.removeChatter(roomCode, name);
-            System.out.println(name + " disconnected from room " + roomCode);
+    protected void handleTextMessage(WebSocketSession sender, TextMessage message) throws Exception {
+        String roomCode = (String) sender.getAttributes().get("roomCode");
+        String name = (String) sender.getAttributes().get("name");
+        if (roomCode == null || name == null) {
+            return;
         }
+
+        List<WebSocketSession> roomSessions = sessionsByRoom.get(roomCode);
+
+        if (roomSessions == null) {
+            return;
+        }
+
+        TextMessage outgoingMessage = new TextMessage(name + ": " + message.getPayload());
+
+        for (WebSocketSession session : roomSessions) {
+            if (session.isOpen()) {
+                session.sendMessage(outgoingMessage);
+            }
+        }
+    }
+
+    @Override
+    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
+        String roomCode = (String) session.getAttributes().get("roomCode");
+
+        String name = (String) session.getAttributes().get("name");
+
+        if (roomCode != null || name != null) {
+            return;
+        }
+
+        List<WebSocketSession> roomSessions = sessionsByRoom.get(roomCode);
+        if (roomSessions != null) {
+            roomSessions.remove(session);
+            if (roomSessions.isEmpty()) {
+                sessionsByRoom.remove(roomCode);
+            }
+        }
+
+        roomService.removeChatter(roomCode, name);
+
+        System.out.println(name + " disconnected from room " + roomCode);
     }
 }

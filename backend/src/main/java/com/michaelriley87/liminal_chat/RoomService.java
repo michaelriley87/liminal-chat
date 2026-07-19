@@ -17,7 +17,6 @@ public class RoomService {
         String code = generateRoomCode();
         Room room = new Room(code);
         List<Chatter> chatters = new CopyOnWriteArrayList<>();
-        chatters.add(new Chatter(chatterName));
         rooms.put(code, room);
         chattersByRoom.put(code, chatters);
         return room;
