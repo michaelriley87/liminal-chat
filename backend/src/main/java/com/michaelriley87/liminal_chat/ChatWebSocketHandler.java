@@ -66,16 +66,17 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
       return;
     }
 
-    roomService.updateRoomActivity(roomCode);
-
     ChatMessage incomingMessage = objectMapper.readValue(message.getPayload(), ChatMessage.class);
 
-    if (incomingMessage.getContent() == null || incomingMessage.getContent().isBlank()) {
+    String content = incomingMessage.getContent();
+
+    if (content == null || content.isBlank()) {
       return;
     }
 
-    ChatMessage outgoingMessage =
-        new ChatMessage("CHAT_MESSAGE", name, incomingMessage.getContent());
+    roomService.updateRoomActivity(roomCode);
+
+    ChatMessage outgoingMessage = new ChatMessage("CHAT_MESSAGE", name, content.trim());
 
     String outgoingJson = objectMapper.writeValueAsString(outgoingMessage);
 

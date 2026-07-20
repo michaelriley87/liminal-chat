@@ -1,6 +1,7 @@
 package com.michaelriley87.liminal_chat;
 
 public class ChatMessage {
+
   private String type;
   private String sender;
   private String content;
@@ -17,12 +18,23 @@ public class ChatMessage {
     return type;
   }
 
-  public String getSender() {
+  public void setType(String type) {
+    this.type = type;
+  }
 
+  public String getSender() {
     return sender;
+  }
+
+  public void setSender(String sender) {
+    this.sender = sender;
   }
 
   public String getContent() {
     return content;
+  }
+
+  public void setContent(String content) {
+    this.content = content;
   }
 }
