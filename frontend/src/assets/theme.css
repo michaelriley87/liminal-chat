@@ -1,0 +1,21 @@
+:root {
+  --color-bg-light: #35515a;
+  --color-bg-mid: #2f474b;
+  --color-bg-dark: #293b42;
+
+  --color-text: #e4ecec;
+  --color-text-muted: #aebfc0;
+  --color-text-dim: #819497;
+  --color-text-inactive: #879b9d;
+
+  --color-border: rgba(196, 216, 215, 0.3);
+  --color-border-soft: rgba(218, 233, 232, 0.2);
+  --color-border-faint: rgba(218, 233, 232, 0.16);
+
+  --color-focus: #d3e1e1;
+  --color-error: #d7aaa5;
+
+  --font-sans: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+
+  --page-width: 760px;
+}

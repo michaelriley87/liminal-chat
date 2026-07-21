@@ -1,15 +1,34 @@
 <script setup>
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
+const route = useRoute()
 const router = useRouter()
 
-const displayName = ref('')
+const mode = ref('create')
+const createName = ref('')
+const joinName = ref('')
 const roomCode = ref('')
-const errorMessage = ref('')
+const isCreatingRoom = ref(false)
+
+const errorMessage = ref(typeof route.query.error === 'string' ? route.query.error : '')
+
+const activeName = computed({
+  get() {
+    return mode.value === 'create' ? createName.value : joinName.value
+  },
+  set(value) {
+    if (mode.value === 'create') {
+      createName.value = value
+    } else {
+      joinName.value = value
+    }
+  },
+})
 
 async function createRoom() {
   errorMessage.value = ''
+  isCreatingRoom.value = true
 
   try {
     const response = await fetch('http://localhost:8080/rooms', {
@@ -28,12 +47,14 @@ async function createRoom() {
         code: room.code,
       },
       query: {
-        name: displayName.value,
+        name: createName.value,
       },
     })
   } catch (error) {
     errorMessage.value = 'Could not create room.'
     console.error(error)
+  } finally {
+    isCreatingRoom.value = false
   }
 }
 
@@ -46,86 +67,335 @@ function joinRoom() {
       code: roomCode.value.toUpperCase(),
     },
     query: {
-      name: displayName.value,
+      name: joinName.value,
     },
   })
+}
+
+function submitForm() {
+  if (mode.value === 'create') {
+    createRoom()
+  } else {
+    joinRoom()
+  }
 }
 </script>
 
 <template>
-  <main>
-    <h1>Liminal Chat</h1>
-    <p>Create a temporary chat room or join an existing one.</p>
+  <main class="page">
+    <header class="header">
+      <p class="wordmark">LIMINAL</p>
+      <p class="status">temporary private chat</p>
+    </header>
 
-    <p v-if="errorMessage">{{ errorMessage }}</p>
+    <section class="content">
+      <div class="intro">
+        <h1>
+          Talk for
+          <span>now.</span>
+        </h1>
 
-    <form @submit.prevent="createRoom">
-      <h2>Create a room</h2>
+        <p>
+          Create a temporary room or enter one using a shared code. Rooms disappear after
+          inactivity.
+        </p>
+      </div>
 
-      <label for="create-name">Display name</label>
-      <input
-        id="create-name"
-        v-model.trim="displayName"
-        type="text"
-        placeholder="Enter your name"
-        required
-      />
+      <div class="panel">
+        <nav class="mode-switch" aria-label="Room action">
+          <button type="button" :class="{ active: mode === 'create' }" @click="mode = 'create'">
+            create
+          </button>
 
-      <button type="submit">Create room</button>
-    </form>
+          <button type="button" :class="{ active: mode === 'join' }" @click="mode = 'join'">
+            join
+          </button>
+        </nav>
 
-    <hr />
+        <p v-if="errorMessage" class="error" role="alert">
+          {{ errorMessage }}
+        </p>
 
-    <form @submit.prevent="joinRoom">
-      <h2>Join a room</h2>
+        <form @submit.prevent="submitForm">
+          <div v-if="mode === 'join'" class="field">
+            <label for="room-code">room code</label>
 
-      <label for="room-code">Room code</label>
-      <input
-        id="room-code"
-        v-model.trim="roomCode"
-        type="text"
-        placeholder="ABCDE"
-        maxlength="5"
-        required
-      />
+            <input
+              id="room-code"
+              v-model.trim="roomCode"
+              class="room-code"
+              type="text"
+              maxlength="5"
+              autocomplete="off"
+              placeholder="ABCDE"
+              required
+            />
+          </div>
 
-      <label for="join-name">Display name</label>
-      <input
-        id="join-name"
-        v-model.trim="displayName"
-        type="text"
-        placeholder="Enter your name"
-        required
-      />
+          <div class="field">
+            <label for="display-name">display name</label>
 
-      <button type="submit">Join room</button>
-    </form>
+            <input
+              id="display-name"
+              v-model.trim="activeName"
+              type="text"
+              autocomplete="nickname"
+              placeholder="your name"
+              required
+            />
+          </div>
+
+          <button class="submit-button" type="submit" :disabled="isCreatingRoom">
+            <span>
+              {{ mode === 'create' ? (isCreatingRoom ? 'creating' : 'create room') : 'enter room' }}
+            </span>
+
+            <span aria-hidden="true">↗</span>
+          </button>
+        </form>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <p>rooms expire after inactivity</p>
+      <p>no account / no history</p>
+    </footer>
   </main>
 </template>
 
 <style scoped>
-main {
-  width: min(100% - 2rem, 32rem);
-  margin: 4rem auto;
+.page {
+  display: flex;
+  flex-direction: column;
+  width: min(100% - 3rem, var(--page-width));
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 2.5rem 0 2rem;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-inline: -1.5rem;
+  padding: 0 1.5rem 1.25rem;
+  border-bottom: 1px solid var(--color-border-soft);
+}
+
+.wordmark,
+.status {
+  margin: 0;
+}
+
+.wordmark {
+  color: var(--color-text);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.34em;
+}
+
+.status {
+  color: var(--color-text-muted);
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+}
+
+.content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 310px;
+  gap: 5rem;
+  align-items: end;
+  flex: 1;
+  padding: 7rem 0 4rem;
+}
+
+.intro {
+  align-self: start;
+}
+
+h1 {
+  max-width: 7.5ch;
+  margin: 0;
+  color: var(--color-text);
+  font-size: clamp(3.5rem, 9vw, 6.5rem);
+  font-weight: 300;
+  letter-spacing: -0.075em;
+  line-height: 0.86;
+}
+
+h1 span {
+  display: block;
+}
+
+.intro p {
+  max-width: 24rem;
+  margin: 2.5rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.88rem;
+  line-height: 1.75;
+}
+
+.panel {
+  width: 100%;
+  transform: translateY(-2rem);
+}
+
+.mode-switch {
+  display: flex;
+  gap: 1.75rem;
+  margin-bottom: 3rem;
+  border-bottom: 1px solid var(--color-border-soft);
+}
+
+.mode-switch button {
+  position: relative;
+  padding: 0 0 0.85rem;
+  color: var(--color-text-inactive);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+}
+
+.mode-switch button.active {
+  color: var(--color-text);
+}
+
+.mode-switch button.active::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 1px;
+  background: var(--color-focus);
+  content: '';
 }
 
 form {
   display: grid;
-  gap: 0.75rem;
-  margin: 2rem 0;
+  gap: 2.4rem;
 }
 
-input,
-button {
-  padding: 0.75rem;
-  font: inherit;
+.field {
+  display: grid;
+  gap: 0.7rem;
 }
 
-button {
+label {
+  color: var(--color-text-muted);
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+}
+
+input {
+  width: 100%;
+  padding: 0.35rem 0 1rem;
+  color: var(--color-text);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 0;
+  outline: none;
+  font-size: 0.95rem;
+}
+
+input::placeholder {
+  color: var(--color-text-dim);
+}
+
+input:focus {
+  border-bottom-color: var(--color-focus);
+}
+
+.room-code {
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.submit-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.25rem;
+  padding: 1rem 0;
+  color: var(--color-text);
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
   cursor: pointer;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
 }
 
-hr {
-  margin: 2rem 0;
+.submit-button:hover:not(:disabled) {
+  color: #ffffff;
+  border-color: var(--color-focus);
+}
+
+.submit-button:disabled {
+  cursor: wait;
+  opacity: 0.45;
+}
+
+.error {
+  margin: 0 0 2rem;
+  color: var(--color-error);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.footer {
+  display: flex;
+  justify-content: space-between;
+  padding-top: 1rem;
+  color: var(--color-text-dim);
+  border-top: 1px solid var(--color-border-faint);
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+}
+
+.footer p {
+  margin: 0;
+}
+
+@media (max-width: 680px) {
+  .page {
+    width: min(100% - 2rem, var(--page-width));
+    padding-top: 1.5rem;
+  }
+
+  .header {
+    margin-inline: 0;
+    padding-inline: 0;
+  }
+
+  .status {
+    display: none;
+  }
+
+  .content {
+    display: block;
+    padding: 5rem 0 4rem;
+  }
+
+  h1 {
+    font-size: clamp(3.4rem, 18vw, 5rem);
+  }
+
+  .intro p {
+    margin-top: 2rem;
+  }
+
+  .panel {
+    margin-top: 6rem;
+    transform: none;
+  }
+
+  .footer {
+    display: grid;
+    gap: 0.6rem;
+  }
 }
 </style>
