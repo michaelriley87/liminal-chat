@@ -9,6 +9,11 @@ const ConnectionStatus = Object.freeze({
   DISCONNECTED: 'disconnected',
 })
 
+const MessageType = Object.freeze({
+  CHAT: 'CHAT_MESSAGE',
+  PARTICIPANTS: 'PARTICIPANT_LIST',
+})
+
 const timeFormatter = new Intl.DateTimeFormat([], {
   hour: '2-digit',
   minute: '2-digit',
@@ -19,17 +24,27 @@ export function useChatRoom(roomCode, displayName) {
   const connectionStatus = ref(ConnectionStatus.CONNECTING)
   const errorMessage = ref('')
   const messages = ref([])
+  const participants = ref([])
 
   let socket = null
   let intentionalClose = false
 
   function appendMessage(message) {
     messages.value.push({
-      type: message.type ?? 'CHAT_MESSAGE',
+      type: message.type ?? MessageType.CHAT,
       sender: message.sender ?? '',
       content: message.content ?? '',
       time: timeFormatter.format(new Date()),
     })
+  }
+
+  function handleIncomingMessage(message) {
+    if (message.type === MessageType.PARTICIPANTS) {
+      participants.value = Array.isArray(message.participants) ? message.participants : []
+      return
+    }
+
+    appendMessage(message)
   }
 
   function connect() {
@@ -50,7 +65,7 @@ export function useChatRoom(roomCode, displayName) {
 
     socket.onmessage = (event) => {
       try {
-        appendMessage(JSON.parse(event.data))
+        handleIncomingMessage(JSON.parse(event.data))
       } catch (error) {
         console.error('Could not read incoming message.', error)
       }
@@ -63,6 +78,7 @@ export function useChatRoom(roomCode, displayName) {
 
     socket.onclose = (event) => {
       connectionStatus.value = ConnectionStatus.DISCONNECTED
+      participants.value = []
 
       if (intentionalClose) {
         return
@@ -87,7 +103,7 @@ export function useChatRoom(roomCode, displayName) {
 
     socket.send(
       JSON.stringify({
-        type: 'CHAT_MESSAGE',
+        type: MessageType.CHAT,
         content: trimmedContent,
       }),
     )
@@ -107,6 +123,7 @@ export function useChatRoom(roomCode, displayName) {
     connectionStatus,
     errorMessage,
     messages,
+    participants,
     connect,
     disconnect,
     sendMessage,

@@ -13,10 +13,8 @@ const displayName = typeof route.query.name === 'string' ? route.query.name.trim
 const draftMessage = ref('')
 const messageViewport = ref(null)
 
-const { connectionStatus, errorMessage, messages, connect, disconnect, sendMessage } = useChatRoom(
-  roomCode,
-  displayName,
-)
+const { connectionStatus, errorMessage, messages, participants, connect, disconnect, sendMessage } =
+  useChatRoom(roomCode, displayName)
 
 let redirectTimer = null
 
@@ -141,6 +139,16 @@ onBeforeUnmount(() => {
         <div class="room-detail">
           <p class="section-label">present as</p>
           <p class="participant-name">{{ displayName }}</p>
+        </div>
+
+        <div class="room-detail participant-detail">
+          <p class="section-label">in room</p>
+
+          <ul class="participant-list" aria-label="Room participants">
+            <li v-for="(participant, index) in participants" :key="`${participant}-${index}`">
+              {{ participant }}
+            </li>
+          </ul>
         </div>
 
         <div class="room-detail">
@@ -357,7 +365,8 @@ onBeforeUnmount(() => {
 .room-code,
 .participant-name,
 .status,
-.room-note {
+.room-note,
+.participant-list {
   margin: 0.8rem 0 0;
 }
 
@@ -370,6 +379,14 @@ onBeforeUnmount(() => {
 .participant-name {
   color: var(--color-text);
   font-size: 1rem;
+}
+
+.participant-list {
+  padding: 0;
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  line-height: 1.8;
+  list-style: none;
 }
 
 .status {

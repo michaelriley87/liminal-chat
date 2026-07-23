@@ -19,8 +19,10 @@ public class RoomService {
   public Room createRoom() {
     String code = generateRoomCode();
     Room room = new Room(code);
+
     rooms.put(code, room);
     chattersByRoom.put(code, new CopyOnWriteArrayList<>());
+
     return room;
   }
 
@@ -28,12 +30,9 @@ public class RoomService {
     return rooms.get(code);
   }
 
-  private String generateRoomCode() {
-    return UUID.randomUUID().toString().substring(0, 5).toUpperCase();
-  }
-
   public void addChatter(String roomCode, Chatter chatter) {
     List<Chatter> chatters = chattersByRoom.get(roomCode);
+
     if (chatters != null) {
       chatters.add(chatter);
     }
@@ -41,9 +40,27 @@ public class RoomService {
 
   public void removeChatter(String roomCode, String name) {
     List<Chatter> chatters = chattersByRoom.get(roomCode);
-    if (chatters != null) {
-      chatters.removeIf(chatter -> chatter.getName().equals(name));
+
+    if (chatters == null) {
+      return;
     }
+
+    for (Chatter chatter : chatters) {
+      if (chatter.getName().equals(name)) {
+        chatters.remove(chatter);
+        return;
+      }
+    }
+  }
+
+  public List<String> getChatterNames(String roomCode) {
+    List<Chatter> chatters = chattersByRoom.get(roomCode);
+
+    if (chatters == null) {
+      return List.of();
+    }
+
+    return chatters.stream().map(chatter -> chatter.getName()).toList();
   }
 
   public void updateRoomActivity(String roomCode) {
@@ -64,8 +81,8 @@ public class RoomService {
             boolean removed = rooms.remove(roomCode, room);
 
             if (removed) {
-              rooms.remove(roomCode);
               chattersByRoom.remove(roomCode);
+              expiredRoomCodes.add(roomCode);
 
               System.out.println("Expired room " + roomCode);
             }
@@ -73,5 +90,9 @@ public class RoomService {
         });
 
     return expiredRoomCodes;
+  }
+
+  private String generateRoomCode() {
+    return UUID.randomUUID().toString().substring(0, 5).toUpperCase();
   }
 }
