@@ -1,9 +1,13 @@
 package com.michaelriley87.liminal_chat;
 
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -19,6 +23,21 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
   private static final String SYSTEM_MESSAGE = "SYSTEM_MESSAGE";
   private static final String PARTICIPANT_LIST = "PARTICIPANT_LIST";
 
+  private static final int MAX_NAME_LENGTH = 24;
+  private static final int MAX_MESSAGE_LENGTH = 500;
+
+  private static final Pattern ROOM_CODE_PATTERN = Pattern.compile("[A-Z0-9]{5}");
+
+  private static final CloseStatus ROOM_UNAVAILABLE = new CloseStatus(4001, "Room unavailable");
+
+  private static final CloseStatus NAME_TAKEN =
+      new CloseStatus(4002, "Display name already in use");
+
+  private static final CloseStatus ROOM_EXPIRED = new CloseStatus(4001, "Room expired");
+
+  private static final CloseStatus INVALID_CONNECTION =
+      new CloseStatus(4003, "Invalid connection details");
+
   private final RoomService roomService;
   private final ObjectMapper objectMapper;
   private final Map<String, List<WebSocketSession>> sessionsByRoom = new ConcurrentHashMap<>();
@@ -31,35 +50,62 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
   @Override
   public void afterConnectionEstablished(WebSocketSession session) throws Exception {
     if (session.getUri() == null) {
-      session.close(CloseStatus.BAD_DATA);
+      session.close(INVALID_CONNECTION);
       return;
     }
 
     var parameters = UriComponentsBuilder.fromUri(session.getUri()).build().getQueryParams();
 
-    String roomCode = parameters.getFirst("room");
-    String name = parameters.getFirst("name");
+    String roomCodeParameter = parameters.getFirst("room");
+    String nameParameter = parameters.getFirst("name");
 
-    if (roomCode == null
-        || name == null
-        || name.isBlank()
-        || roomService.getRoom(roomCode) == null) {
-      session.close(CloseStatus.BAD_DATA);
+    if (roomCodeParameter == null || nameParameter == null) {
+      session.close(INVALID_CONNECTION);
       return;
     }
 
-    String trimmedName = name.trim();
+    String roomCode;
+    String name;
+
+    try {
+      roomCode =
+          URLDecoder.decode(roomCodeParameter, StandardCharsets.UTF_8)
+              .trim()
+              .toUpperCase(Locale.ROOT);
+      name = URLDecoder.decode(nameParameter, StandardCharsets.UTF_8).trim();
+    } catch (IllegalArgumentException exception) {
+      session.close(INVALID_CONNECTION);
+      return;
+    }
+
+    if (!ROOM_CODE_PATTERN.matcher(roomCode).matches()
+        || name.isBlank()
+        || name.length() > MAX_NAME_LENGTH) {
+      session.close(INVALID_CONNECTION);
+      return;
+    }
+
+    RoomService.AddChatterResult addResult = roomService.tryAddChatter(roomCode, new Chatter(name));
+
+    if (addResult == RoomService.AddChatterResult.ROOM_UNAVAILABLE) {
+      session.close(ROOM_UNAVAILABLE);
+      return;
+    }
+
+    if (addResult == RoomService.AddChatterResult.NAME_TAKEN) {
+      session.close(NAME_TAKEN);
+      return;
+    }
 
     session.getAttributes().put("roomCode", roomCode);
-    session.getAttributes().put("name", trimmedName);
+    session.getAttributes().put("name", name);
 
     sessionsByRoom.computeIfAbsent(roomCode, code -> new CopyOnWriteArrayList<>()).add(session);
-    roomService.addChatter(roomCode, new Chatter(trimmedName));
 
-    broadcastSystemMessage(roomCode, trimmedName + " joined the room");
+    broadcastSystemMessage(roomCode, name + " joined the room");
     broadcastParticipantList(roomCode);
 
-    System.out.println(trimmedName + " connected to room " + roomCode);
+    System.out.println(name + " connected to room " + roomCode);
   }
 
   @Override
@@ -68,20 +114,37 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     String roomCode = (String) senderSession.getAttributes().get("roomCode");
     String name = (String) senderSession.getAttributes().get("name");
 
-    if (roomCode == null || name == null) {
+    if (roomCode == null || name == null || roomService.getRoom(roomCode) == null) {
       return;
     }
 
-    ChatMessage incomingMessage = objectMapper.readValue(message.getPayload(), ChatMessage.class);
+    ChatMessage incomingMessage;
+
+    try {
+      incomingMessage = objectMapper.readValue(message.getPayload(), ChatMessage.class);
+    } catch (Exception exception) {
+      return;
+    }
+
+    if (!CHAT_MESSAGE.equals(incomingMessage.getType())) {
+      return;
+    }
+
     String content = incomingMessage.getContent();
 
-    if (content == null || content.isBlank()) {
+    if (content == null) {
+      return;
+    }
+
+    String trimmedContent = content.trim();
+
+    if (trimmedContent.isBlank() || trimmedContent.length() > MAX_MESSAGE_LENGTH) {
       return;
     }
 
     roomService.updateRoomActivity(roomCode);
 
-    ChatMessage outgoingMessage = new ChatMessage(CHAT_MESSAGE, name, content.trim());
+    ChatMessage outgoingMessage = new ChatMessage(CHAT_MESSAGE, name, trimmedContent);
 
     broadcast(roomCode, outgoingMessage);
   }
@@ -125,7 +188,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     for (WebSocketSession session : roomSessions) {
       if (session.isOpen()) {
         try {
-          session.close(CloseStatus.NORMAL.withReason("Room expired"));
+          session.close(ROOM_EXPIRED);
         } catch (Exception exception) {
           System.out.println("Failed to close WebSocket session: " + exception.getMessage());
         }

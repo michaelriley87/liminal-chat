@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 
 import { WS_BASE_URL } from '../config'
+import { MAX_MESSAGE_LENGTH } from '../validation'
 
 const ConnectionStatus = Object.freeze({
   CONNECTING: 'connecting',
@@ -11,7 +12,15 @@ const ConnectionStatus = Object.freeze({
 
 const MessageType = Object.freeze({
   CHAT: 'CHAT_MESSAGE',
+  SYSTEM: 'SYSTEM_MESSAGE',
   PARTICIPANTS: 'PARTICIPANT_LIST',
+})
+
+const CloseCode = Object.freeze({
+  ABNORMAL: 1006,
+  ROOM_UNAVAILABLE: 4001,
+  NAME_TAKEN: 4002,
+  INVALID_CONNECTION: 4003,
 })
 
 const timeFormatter = new Intl.DateTimeFormat([], {
@@ -28,6 +37,7 @@ export function useChatRoom(roomCode, displayName) {
 
   let socket = null
   let intentionalClose = false
+  let hasConnected = false
 
   function appendMessage(message) {
     messages.value.push({
@@ -39,16 +49,58 @@ export function useChatRoom(roomCode, displayName) {
   }
 
   function handleIncomingMessage(message) {
+    if (!message || typeof message !== 'object') {
+      return
+    }
+
     if (message.type === MessageType.PARTICIPANTS) {
-      participants.value = Array.isArray(message.participants) ? message.participants : []
+      participants.value = Array.isArray(message.participants)
+        ? message.participants.filter((participant) => typeof participant === 'string')
+        : []
+      return
+    }
+
+    if (
+      (message.type !== MessageType.CHAT && message.type !== MessageType.SYSTEM) ||
+      typeof message.content !== 'string' ||
+      !message.content ||
+      (message.type === MessageType.CHAT && typeof message.sender !== 'string')
+    ) {
       return
     }
 
     appendMessage(message)
   }
 
+  function getCloseMessage(event) {
+    if (event.code === CloseCode.ROOM_UNAVAILABLE) {
+      return 'This room no longer exists.'
+    }
+
+    if (event.code === CloseCode.NAME_TAKEN) {
+      return 'That display name is already in use in this room.'
+    }
+
+    if (event.code === CloseCode.INVALID_CONNECTION) {
+      return 'The room code or display name is invalid.'
+    }
+
+    if (event.code === CloseCode.ABNORMAL) {
+      return hasConnected
+        ? 'The connection to the room was lost.'
+        : 'Could not connect to the room.'
+    }
+
+    if (event.reason) {
+      return event.reason
+    }
+
+    return 'The room connection was closed.'
+  }
+
   function connect() {
     intentionalClose = false
+    hasConnected = false
     connectionStatus.value = ConnectionStatus.CONNECTING
     errorMessage.value = ''
 
@@ -60,6 +112,7 @@ export function useChatRoom(roomCode, displayName) {
     socket = new WebSocket(`${WS_BASE_URL}/ws?${query.toString()}`)
 
     socket.onopen = () => {
+      hasConnected = true
       connectionStatus.value = ConnectionStatus.CONNECTED
     }
 
@@ -73,7 +126,6 @@ export function useChatRoom(roomCode, displayName) {
 
     socket.onerror = () => {
       connectionStatus.value = ConnectionStatus.ERROR
-      errorMessage.value = 'The room connection encountered an error.'
     }
 
     socket.onclose = (event) => {
@@ -84,20 +136,22 @@ export function useChatRoom(roomCode, displayName) {
         return
       }
 
-      if (event.code === 1007) {
-        errorMessage.value = 'This room does not exist or has expired.'
-      } else if (event.reason) {
-        errorMessage.value = event.reason
-      } else {
-        errorMessage.value = 'The room connection was closed.'
-      }
+      errorMessage.value = getCloseMessage(event)
     }
   }
 
   function sendMessage(content) {
+    if (typeof content !== 'string') {
+      return false
+    }
+
     const trimmedContent = content.trim()
 
-    if (!trimmedContent || socket?.readyState !== WebSocket.OPEN) {
+    if (
+      !trimmedContent ||
+      trimmedContent.length > MAX_MESSAGE_LENGTH ||
+      socket?.readyState !== WebSocket.OPEN
+    ) {
       return false
     }
 
@@ -114,7 +168,7 @@ export function useChatRoom(roomCode, displayName) {
   function disconnect(reason = 'Left room') {
     intentionalClose = true
 
-    if (socket?.readyState === WebSocket.OPEN) {
+    if (socket?.readyState === WebSocket.OPEN || socket?.readyState === WebSocket.CONNECTING) {
       socket.close(1000, reason)
     }
   }

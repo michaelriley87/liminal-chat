@@ -3,20 +3,24 @@ import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { useChatRoom } from '../composables/useChatRoom'
+import {
+  getDisplayNameError,
+  isValidRoomCode,
+  normaliseDisplayName,
+  normaliseRoomCode,
+} from '../validation'
 
 const route = useRoute()
 const router = useRouter()
 
-const roomCode = String(route.params.code ?? '').toUpperCase()
-const displayName = typeof route.query.name === 'string' ? route.query.name.trim() : ''
+const roomCode = normaliseRoomCode(route.params.code)
+const displayName = normaliseDisplayName(route.query.name)
 
 const draftMessage = ref('')
 const messageViewport = ref(null)
 
 const { connectionStatus, errorMessage, messages, participants, connect, disconnect, sendMessage } =
   useChatRoom(roomCode, displayName)
-
-let redirectTimer = null
 
 function scrollToLatestMessage() {
   nextTick(() => {
@@ -51,18 +55,16 @@ watch([connectionStatus, errorMessage], ([status, message]) => {
     return
   }
 
-  redirectTimer = window.setTimeout(() => {
-    router.replace({
-      name: 'home',
-      query: {
-        error: message,
-      },
-    })
-  }, 1500)
+  router.replace({
+    name: 'home',
+    query: {
+      error: message,
+    },
+  })
 })
 
 onMounted(() => {
-  if (!roomCode || !displayName) {
+  if (!isValidRoomCode(roomCode) || getDisplayNameError(displayName)) {
     router.replace({
       name: 'home',
       query: {
@@ -77,10 +79,6 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  if (redirectTimer) {
-    window.clearTimeout(redirectTimer)
-  }
-
   disconnect('Page closed')
 })
 </script>
@@ -173,6 +171,7 @@ onBeforeUnmount(() => {
           id="message"
           v-model="draftMessage"
           type="text"
+          maxlength="500"
           placeholder="write a message"
           autocomplete="off"
           :disabled="connectionStatus !== 'connected'"

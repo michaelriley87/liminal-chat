@@ -1,6 +1,14 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+
+import { API_BASE_URL } from '../config'
+import {
+  getDisplayNameError,
+  isValidRoomCode,
+  normaliseDisplayName,
+  normaliseRoomCode,
+} from '../validation'
 
 const route = useRoute()
 const router = useRouter()
@@ -26,12 +34,24 @@ const activeName = computed({
   },
 })
 
-async function createRoom() {
+function getValidatedName() {
+  const name = normaliseDisplayName(activeName.value)
+  const validationError = getDisplayNameError(name)
+
+  if (validationError) {
+    errorMessage.value = validationError
+    return null
+  }
+
+  return name
+}
+
+async function createRoom(name) {
   errorMessage.value = ''
   isCreatingRoom.value = true
 
   try {
-    const response = await fetch('http://localhost:8080/rooms', {
+    const response = await fetch(`${API_BASE_URL}/rooms`, {
       method: 'POST',
     })
 
@@ -40,14 +60,19 @@ async function createRoom() {
     }
 
     const room = await response.json()
+    const createdRoomCode = normaliseRoomCode(room?.code)
+
+    if (!isValidRoomCode(createdRoomCode)) {
+      throw new Error('Server returned an invalid room code')
+    }
 
     router.push({
       name: 'chat-room',
       params: {
-        code: room.code,
+        code: createdRoomCode,
       },
       query: {
-        name: createName.value,
+        name,
       },
     })
   } catch (error) {
@@ -58,27 +83,54 @@ async function createRoom() {
   }
 }
 
-function joinRoom() {
+function joinRoom(name) {
+  const normalisedRoomCode = normaliseRoomCode(roomCode.value)
+
+  if (!isValidRoomCode(normalisedRoomCode)) {
+    errorMessage.value = 'Room codes must contain exactly five letters or numbers.'
+    return
+  }
+
   errorMessage.value = ''
 
   router.push({
     name: 'chat-room',
     params: {
-      code: roomCode.value.toUpperCase(),
+      code: normalisedRoomCode,
     },
     query: {
-      name: joinName.value,
+      name,
     },
   })
 }
 
 function submitForm() {
+  const name = getValidatedName()
+
+  if (!name) {
+    return
+  }
+
   if (mode.value === 'create') {
-    createRoom()
+    createRoom(name)
   } else {
-    joinRoom()
+    joinRoom(name)
   }
 }
+
+onMounted(() => {
+  if (typeof route.query.error !== 'string') {
+    return
+  }
+
+  const remainingQuery = { ...route.query }
+
+  delete remainingQuery.error
+
+  router.replace({
+    query: remainingQuery,
+  })
+})
 </script>
 
 <template>
@@ -126,6 +178,7 @@ function submitForm() {
               class="room-code"
               type="text"
               maxlength="5"
+              pattern="[A-Za-z0-9]{5}"
               autocomplete="off"
               placeholder="ABCDE"
               required
@@ -139,6 +192,7 @@ function submitForm() {
               id="display-name"
               v-model.trim="activeName"
               type="text"
+              maxlength="24"
               autocomplete="nickname"
               placeholder="your name"
               required

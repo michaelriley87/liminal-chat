@@ -13,6 +13,12 @@ import org.springframework.stereotype.Service;
 @Service
 public class RoomService {
 
+  public enum AddChatterResult {
+    ADDED,
+    ROOM_UNAVAILABLE,
+    NAME_TAKEN
+  }
+
   private final Map<String, Room> rooms = new ConcurrentHashMap<>();
   private final Map<String, List<Chatter>> chattersByRoom = new ConcurrentHashMap<>();
 
@@ -30,11 +36,29 @@ public class RoomService {
     return rooms.get(code);
   }
 
-  public void addChatter(String roomCode, Chatter chatter) {
+  public AddChatterResult tryAddChatter(String roomCode, Chatter chatter) {
     List<Chatter> chatters = chattersByRoom.get(roomCode);
 
-    if (chatters != null) {
+    if (chatters == null || rooms.get(roomCode) == null) {
+      return AddChatterResult.ROOM_UNAVAILABLE;
+    }
+
+    synchronized (chatters) {
+      if (rooms.get(roomCode) == null) {
+        return AddChatterResult.ROOM_UNAVAILABLE;
+      }
+
+      boolean nameTaken =
+          chatters.stream()
+              .anyMatch(
+                  existingChatter -> existingChatter.getName().equalsIgnoreCase(chatter.getName()));
+
+      if (nameTaken) {
+        return AddChatterResult.NAME_TAKEN;
+      }
+
       chatters.add(chatter);
+      return AddChatterResult.ADDED;
     }
   }
 
