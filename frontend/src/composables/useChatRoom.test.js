@@ -50,7 +50,7 @@ describe('useChatRoom', () => {
     chatRoom.connect()
     const socket = MockWebSocket.instances[0]
 
-    expect(socket.url).toBe('ws://localhost:8080/ws?room=ABCDE&name=Alice+Smith')
+    expect(socket.url).toBe('ws://localhost:3000/ws?room=ABCDE&name=Alice+Smith')
     expect(chatRoom.connectionStatus.value).toBe('connecting')
 
     socket.open()

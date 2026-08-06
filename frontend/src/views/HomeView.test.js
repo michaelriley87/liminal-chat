@@ -47,7 +47,7 @@ describe('HomeView', () => {
     await wrapper.find('form').trigger('submit')
     await flushPromises()
 
-    expect(fetch).toHaveBeenCalledWith('http://localhost:8080/rooms', { method: 'POST' })
+    expect(fetch).toHaveBeenCalledWith('/rooms', { method: 'POST' })
     expect(mocks.router.push).toHaveBeenCalledWith({
       name: 'chat-room',
       params: { code: 'AB12C' },

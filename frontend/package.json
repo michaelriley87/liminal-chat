@@ -9,10 +9,14 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "run-s \"lint:*\"",
-    "lint:oxlint": "oxlint . --fix",
-    "lint:eslint": "eslint . --fix --cache",
-    "format": "prettier --write --experimental-cli src/"
+    "lint": "run-s lint:oxlint lint:eslint",
+    "lint:oxlint": "oxlint .",
+    "lint:eslint": "eslint . --cache",
+    "lint:fix": "run-s \"lint:fix:*\"",
+    "lint:fix:oxlint": "oxlint . --fix",
+    "lint:fix:eslint": "eslint . --fix --cache",
+    "format": "prettier --write --experimental-cli src/",
+    "format:check": "prettier --check src vite.config.js package.json ../README.md ../compose.yaml ../.github/workflows/ci.yml"
   },
   "dependencies": {
     "vue": "^3.5.38",
