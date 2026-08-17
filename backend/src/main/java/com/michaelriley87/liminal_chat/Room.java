@@ -1,14 +1,21 @@
 package com.michaelriley87.liminal_chat;
 
+import java.time.Clock;
 import java.time.Instant;
 
 public class Room {
   private final String code;
-  private Instant lastActivity;
+  private final Clock clock;
+  private volatile Instant lastActivity;
 
   public Room(String code) {
+    this(code, Clock.systemUTC());
+  }
+
+  Room(String code, Clock clock) {
     this.code = code;
-    this.lastActivity = Instant.now();
+    this.clock = clock;
+    this.lastActivity = clock.instant();
   }
 
   public String getCode() {
@@ -20,6 +27,6 @@ public class Room {
   }
 
   public void updateLastActivity() {
-    lastActivity = Instant.now();
+    lastActivity = clock.instant();
   }
 }

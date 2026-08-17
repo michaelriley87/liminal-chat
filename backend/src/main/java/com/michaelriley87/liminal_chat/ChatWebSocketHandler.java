@@ -219,8 +219,18 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
     for (WebSocketSession session : roomSessions) {
       if (session.isOpen()) {
-        synchronized (session) {
-          session.sendMessage(outgoingMessage);
+        try {
+          synchronized (session) {
+            session.sendMessage(outgoingMessage);
+          }
+        } catch (Exception exception) {
+          System.out.println("Failed to send WebSocket message: " + exception.getMessage());
+
+          try {
+            session.close(CloseStatus.SERVER_ERROR);
+          } catch (Exception closeException) {
+            System.out.println("Failed to close WebSocket session: " + closeException.getMessage());
+          }
         }
       }
     }

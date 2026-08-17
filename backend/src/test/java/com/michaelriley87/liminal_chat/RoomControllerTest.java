@@ -40,6 +40,16 @@ class RoomControllerTest {
   }
 
   @Test
+  void normalisesRoomCodeWhenGettingRoom() throws Exception {
+    when(roomService.getRoom("ABCDE")).thenReturn(new Room("ABCDE"));
+
+    mockMvc
+        .perform(get("/rooms/abcde"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("ABCDE"));
+  }
+
+  @Test
   void returnsNotFoundForMissingRoom() throws Exception {
     mockMvc.perform(get("/rooms/ABCDE")).andExpect(status().isNotFound());
   }

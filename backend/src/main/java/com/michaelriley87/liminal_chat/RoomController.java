@@ -1,5 +1,6 @@
 package com.michaelriley87.liminal_chat;
 
+import java.util.Locale;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -23,7 +24,7 @@ public class RoomController {
 
   @GetMapping("/{code}")
   public ResponseEntity<Room> getRoom(@PathVariable String code) {
-    Room room = roomService.getRoom(code);
+    Room room = roomService.getRoom(code.trim().toUpperCase(Locale.ROOT));
 
     if (room == null) {
       return ResponseEntity.notFound().build();

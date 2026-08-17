@@ -4,12 +4,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.io.IOException;
 import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
@@ -163,6 +165,25 @@ class ChatWebSocketHandlerTest {
     handler.closeRoomSessions(roomCode);
 
     assertClosedWith(session, 4001, "Room expired");
+  }
+
+  @Test
+  void continuesBroadcastWhenOneSessionFails() throws Exception {
+    Room room = roomService.createRoom();
+    WebSocketSession failingSession = session("/ws?room=" + room.getCode() + "&name=Alice");
+    WebSocketSession healthySession = session("/ws?room=" + room.getCode() + "&name=Bob");
+    handler.afterConnectionEstablished(failingSession);
+    handler.afterConnectionEstablished(healthySession);
+    clearInvocations(failingSession, healthySession);
+    doThrow(new IOException("Connection lost"))
+        .when(failingSession)
+        .sendMessage(any(TextMessage.class));
+
+    handler.handleMessage(
+        healthySession, new TextMessage("{\"type\":\"CHAT_MESSAGE\",\"content\":\"hello\"}"));
+
+    verify(healthySession).sendMessage(any(TextMessage.class));
+    verify(failingSession).close(CloseStatus.SERVER_ERROR);
   }
 
   private WebSocketSession connect(String name) throws Exception {
