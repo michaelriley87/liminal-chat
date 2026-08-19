@@ -97,7 +97,7 @@ public class RoomService {
     }
 
     synchronized (roomState) {
-      return roomState.chatters.stream().map(Chatter::getName).toList();
+      return roomState.chatters.stream().map(chatter -> chatter.getName()).toList();
     }
   }
 
